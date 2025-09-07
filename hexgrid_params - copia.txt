@@ -1,0 +1,183 @@
+import bpy
+import numpy as np
+import pandas as pd
+import os
+from helper_functions import generate_distinct_colors
+
+def camera_move_and_cull(cam, cont, r, phi, theta, target, margin):
+    # Convert spherical → Cartesian
+    x = r * np.sin(theta) * np.cos(phi)
+    y = r * np.sin(theta) * np.sin(phi)
+    z = r * np.cos(theta)
+
+    cam.location = Vector((x, y, z))
+
+    # Make camera look at origin
+    target = Vector((0, 0, 0))
+    direction = target - cam.location
+    cam.rotation_euler = direction.to_track_quat('-Z', 'Y').to_euler()
+
+    resx = bpy.data.scenes["Scene"].render.resolution_x
+    resy = bpy.data.scenes["Scene"].render.resolution_y
+    ortho_scale = obj.data.ortho_scale
+
+    fac = 1/(np.power(resx/resy,2))
+
+    cont.scale[0] = ortho_scale * fac * (margin + 1) * resx/resy
+    cont.scale[1] = ortho_scale * fac * (margin + 1)
+    cont.scale[2] = ortho_scale * fac * 1000
+
+    cont.rotation_euler = cam.rotation_euler
+
+class HexGridParams:
+    def __init__(self, mod, node_group, seed):
+        self.seed = seed
+        self.rng = np.random.default_rng(seed=self.seed)
+
+        self.mod = mod
+        self.node_group = node_group
+        self.nodes = self.node_group.nodes
+
+        self.n_colors = 3
+        self.colors = None
+        self.offset = None
+        self.scale = None
+        self.detail = None
+        self.roughness = None
+        self.lacunarity = None
+        self.distortion = None
+        self.instance_scale = None
+        
+        self.light_altitude = None
+        self.light_azimuth = None
+        
+        self.camera_dist = None
+        self.camera_azimuth = None
+        self.camera_polar = None
+        self.camera_target = None
+        
+        self.csv_path = None
+
+    def set_params(self):
+        self.colors = generate_distinct_colors(self.rng, self.n_colors)
+        
+        self.offset = self.rng.uniform(-999999, 999999, 3)
+        self.scale = self.rng.normal(0, .1)
+        self.detail = self.rng.uniform(0, 15)
+        self.roughness = self.rng.random()
+        self.lacunarity = self.rng.uniform(0, 2)
+        self.distortion = self.rng.uniform(0, 4)
+        self.instance_scale = self.rng.uniform(6, 16)
+        
+        self.light_altitude = self.rng.uniform(0.2, 1.0)
+        self.light_azimuth = self.rng.uniform(0, 2*np.pi)
+        
+        self.camera_dist = 200
+        self.camera_azimuth = self.rng.uniform(0, 2*np.pi) 
+        self.camera_polar = rng.uniform(1/18*np.pi, np.pi/3)
+        self.camera_target = Vector((0, 0, 0))
+
+    def update(self):
+        ids = [i[0] for i in self.mod.items() if "attribute" not in i[0]]
+        names = ["Rows", "Cols", "Seed", "Offset", "Scale", "Detail", "Roughness", "Lacunarity", "Distortion", "To Max"]
+        d = dict(zip(names, ids))
+
+#        self.mod[d["Rows"]] = self.rows
+#        self.mod[d["Cols"]] = self.cols
+        self.mod[d["Seed"]] = self.seed
+        self.mod[d["Offset"]] = self.offset
+        self.mod[d["Scale"]] = self.scale
+        self.mod[d["Detail"]] = self.detail
+        self.mod[d["Roughness"]] = self.roughness
+        self.mod[d["Lacunarity"]] = self.distortion
+        self.mod[d["To Max"]] = self.instance_scale
+
+        color_ramp = self.nodes["Color Ramp"]
+        for i, col in enumerate(self.colors):
+            color_ramp.color_ramp.elements[i].color = (*col, 1.0)
+            
+        sun = bpy.data.objects.get("Sun")
+        if sun and sun.type == 'LIGHT' and sun.data.type == 'SUN':
+            sun.rotation_euler = (self.light_altitude, 0, self.light_azimuth)
+            
+        obj = bpy.data.objects.get("Camera")
+        cont = bpy.data.objects.get("Camera_culler")
+        camera_move_and_cull(cam, cont, self.camera_dist, self.camera_azimuth, self.camera_polar, self.camera_target, .1)
+
+        bpy.context.view_layer.update()
+        self.mod.show_viewport = True
+        
+    def load_params(self,seed,path=None):
+        if path is None:
+            path = self.csv_path
+        
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"CSV file not found at: {path}")
+        
+        df = pd.read_csv(path)
+        
+        if seed not in df['seed'].values:
+            raise ValueError(f"Seed {seed} not found in CSV.")
+
+        self.seed = seed
+        self.rng = np.random.default_rng(seed=self.seed)
+
+        row = df.loc[df['seed'] == seed].iloc[0]
+
+        self.scale = row['scale']
+        self.detail = row['detail']
+        self.roughness = row['roughness']
+        self.lacunarity = row['lacunarity']
+        self.distortion = row['distortion']
+        self.instance_scale = row['instance_scale']
+        self.light_altitude = row["light_altitude"]
+        self.light_azimuth = row["light_azimuth"]
+
+        colors = []
+        for i in range(self.n_colors):
+            colors.append([
+                row[f"color_{i}_r"],
+                row[f"color_{i}_g"],
+                row[f"color_{i}_b"]
+            ])
+        self.colors = np.array(colors)
+        
+        self.csv_path = path
+
+    def save_params(self, path, valid=None):
+        if path is None:
+            path = self.csv_path
+            
+        data = {
+            "seed": self.seed,
+            "scale": self.scale,
+            "detail": self.detail,
+            "roughness": self.roughness,
+            "lacunarity": self.lacunarity,
+            "distortion": self.distortion,
+            "instance_scale": self.instance_scale,
+            "light_altitude": self.light_altitude,
+            "light_azimuth": self.light_azimuth,
+            "valid": valid
+        }
+        for i in range(self.n_colors):
+            data[f"color_{i}_r"] = self.colors[i, 0]
+            data[f"color_{i}_g"] = self.colors[i, 1]
+            data[f"color_{i}_b"] = self.colors[i, 2]
+
+        df_new = pd.DataFrame([data])
+
+        if os.path.exists(path):
+            df_existing = pd.read_csv(path)
+            
+            if self.seed in df_existing['seed'].values:
+                idx = df_existing.index[df_existing['seed'] == self.seed][0]
+                for col in df_new.columns:
+                    df_existing.at[idx, col] = df_new.at[0, col]
+            else:
+                df_existing = pd.concat([df_existing, df_new], ignore_index=True)
+            df_existing.to_csv(path, index=False)
+        else:
+            df_new.to_csv(path, mode='w', header=True, index=False)
+            
+        self.csv_path = path
