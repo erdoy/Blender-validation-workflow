@@ -221,7 +221,11 @@ class HexGridParams:
             if self.seed in df_existing["seed"].values:
                 idx = df_existing.index[df_existing["seed"] == self.seed][0]
                 for col in df_new.columns:
-                    df_existing.at[idx, col] = str(df_new.at[0, col])
+                    try:
+                        df_existing.at[idx, col] = df_new.at[0, col]
+                    except (TypeError, ValueError):
+                        print(col)
+                        df_existing.at[idx, col] = str(df_new.at[0, col])
             else:
                 df_existing = pd.concat([df_existing, df_new], ignore_index=True)
             df_existing.to_csv(path, index=False)
