@@ -1,9 +1,15 @@
 import os
 import shutil
 import subprocess
+import stat
 
 # Configuration (Must match your original script)
 LOCAL_DIR = os.path.join(os.path.expanduser("~"), "Documents", "BlenderScripts")
+
+def remove_readonly(func, path, _):
+    """Error handler for shutil.rmtree to force-remove read-only files."""
+    os.chmod(path, stat.S_IWRITE)
+    func(path)
 
 def cleanup_and_push():
     if not os.path.exists(LOCAL_DIR):
@@ -34,10 +40,11 @@ def cleanup_and_push():
             subprocess.run(["git", "-C", LOCAL_DIR, "push", "origin", "main"], check=True)
             print("Successfully pushed all changes to GitHub!")
 
-        # Move Step 2 inside the try block so it runs if the push succeeds OR if skipped
         print("\n--- Step 2: Wiping local data from computer ---")
-        # shutil.rmtree forcibly deletes a directory and everything inside it
-        shutil.rmtree(LOCAL_DIR)
+        
+        # shutil.rmtree now uses our custom error handler to bypass Read-Only limits
+        shutil.rmtree(LOCAL_DIR, onerror=remove_readonly)
+        
         print(f"Successfully deleted {LOCAL_DIR} and all its contents.")
         print("Your data is safe and the public PC is clean!")
 
@@ -46,7 +53,7 @@ def cleanup_and_push():
         print("CRITICAL: Check your network or GitHub token. DO NOT delete the folder yet if you want to save your work!")
         choice = input("Do you want to force delete the files anyway? (y/n): ")
         if choice.lower() == 'y':
-            shutil.rmtree(LOCAL_DIR)
+            shutil.rmtree(LOCAL_DIR, onerror=remove_readonly)
             print("Directory force deleted.")
             
     except Exception as e:
