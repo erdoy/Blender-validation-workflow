@@ -1,5 +1,5 @@
 import sys
-sys.path.append(r"C:\Users\1234\Documents\Obsidian\Blender\Terrain_random_perfeccionar")
+#sys.path.append(r"C:\Users\1234\Documents\Obsidian\Blender\Terrain_random_perfeccionar")
 from hexgrid_params import *
 from helper_functions import inspect_mod_inputs, inspect_node, generate_distinct_colors
 

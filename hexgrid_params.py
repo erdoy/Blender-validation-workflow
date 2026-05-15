@@ -1,9 +1,42 @@
+import sys
+import site
+import os
+import importlib
 import bpy
 import numpy as np
-import pandas as pd
-import os
 from mathutils import Vector, Euler
+
+# -------------- FIX FOR HAVING INSTALLED PANDAS WITH --user FLAG -----------------#
+
+# Get the path to where the --user flag installs packages
+user_site_packages = site.getusersitepackages()
+
+# Force Blender to look in this folder for modules
+if user_site_packages not in sys.path:
+    sys.path.append(user_site_packages)
+    
+import pandas as pd
+    
+# ---------------------------------------------------------------------------------#
+
+# --------------------- FIX FOR IMPORTING SELF-MADE FILES -------------------------#
+
+# 1. Define the path where your scripts live on this public PC
+scripts_dir = os.path.join(os.path.expanduser("~"), "Documents", "BlenderScripts")
+
+# 2. Add that folder to Python's path if it isn't there already
+if scripts_dir not in sys.path:
+    sys.path.append(scripts_dir)
+
+# 3. Import your custom module!
+import helper_functions
+
 from helper_functions import generate_distinct_colors, camera_move_and_cull
+
+# 4. CRITICAL: Force reload the module
+importlib.reload(helper_functions)
+
+# ---------------------------------------------------------------------------------#
 
 
 class HexGridParams:
