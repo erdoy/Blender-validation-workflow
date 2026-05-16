@@ -1,3 +1,6 @@
+# This is the best AI model so far for the Tabular head, that only takes into account the parameters
+
+
 import pandas as pd
 import numpy as np
 import torch
@@ -26,8 +29,8 @@ df = df.dropna(subset=['valid'])
 df['valid'] = df['valid'].astype(int)
 
 # FIX: Parse camera_target vector strings into distinct numeric columns before dropping
-vector_regex = r'<Vector \(([^,]+),\s*([^,]+),\s*([^>]+)\)>'
-df[['camera_target_x', 'camera_target_y', 'camera_target_z']] = df['camera_target'].str.extract(vector_regex).astype(float)
+# vector_regex = r'<Vector \(([^,]+),\s*([^,]+),\s*([^>]+)\)>'
+# df[['camera_target_x', 'camera_target_y', 'camera_target_z']] = df['camera_target'].str.extract(vector_regex).astype(float)
 df = df.drop(columns=['camera_target', 'seed'], errors='ignore')
 
 # Drop any static zero-variance columns

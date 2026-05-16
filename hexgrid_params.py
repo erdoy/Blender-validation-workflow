@@ -201,17 +201,16 @@ class HexGridParams:
             "camera_polar": self.camera_polar,
             "camera_target": self.camera_target,
             "camera_scale": self.camera_scale,
-            "valid": valid
+            "valid": valid,
+            "offset_x": self.offset[0],
+            "offset_y": self.offset[1],
+            "offset_z": self.offset[2]
         }
+        
         for i in range(self.n_colors):
             data[f"color_{i}_r"] = self.colors[i, 0]
             data[f"color_{i}_g"] = self.colors[i, 1]
             data[f"color_{i}_b"] = self.colors[i, 2]
-            
-        for i in range(self.n_colors):
-            data["offset_x"] = self.offset[0]
-            data["offset_y"] = self.offset[1]
-            data["offset_z"] = self.offset[2]
 
         df_new = pd.DataFrame([data])
 
@@ -233,6 +232,8 @@ class HexGridParams:
             df_new.to_csv(path, mode="w", header=True, index=False)
             
         self.csv_path = path
+
+        return data
         
 #    def complete_params(self, path, cols, valid = None):
 #        if path is None:
