@@ -27,7 +27,7 @@ from helper_functions import inspect_mod_inputs, inspect_node, generate_distinct
 
 # === CONFIG ===
 CSV_PATH = os.path.join(scripts_dir, "data.csv")
-SEED_LIST = list(range(2001, 3000)) 
+SEED_LIST = list(range(2002, 3000)) 
 
 running = False
 current_seed_index = 0
