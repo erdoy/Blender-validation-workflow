@@ -178,9 +178,13 @@ def take_hidden_render():
 # =============================================================
 # 6. THE AI HUNT LOOP
 # =============================================================
+stop_requested = False
 
-def start_hunting():
-    SEED_LIST = list(range(2651, 3000))
+def start_hunting(self,start, end, context,continuous=True):
+    global stop_requested
+    stop_requested = False
+
+    SEED_LIST = list(range(start, end))
 
     print("\nHunting for a Valid Scene...")
 
@@ -214,13 +218,16 @@ def start_hunting():
             
             if probability >= 50.0:
                 print(f"✅ SEED {seed}: SUCCESS! AI loves this scene ({probability:.1f}% confidence).")
-                
-                break
+                hg.save_params(TARGET_CSV_PATH,True)
+                context.scene.my_custom_props.confidence = probability/100
+                if not continuous:
+                    break
             else:
                 print(f"❌ SEED {seed}: AI rejected scene ({probability:.1f}% confidence). Rerolling...")
-                
-        else:
-            print("\n⚠️ Reached max attempts without finding a Valid scene. AI is being very picky!")
+            
+            if stop_requested:
+                print(f"AI Process interrupted by user at seed {seed}!")
+                return
 
     print("--- Hunt Finished ---")
 

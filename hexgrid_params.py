@@ -213,23 +213,40 @@ class HexGridParams:
             data[f"color_{i}_b"] = self.colors[i, 2]
 
         df_new = pd.DataFrame([data])
-
+        
         if os.path.exists(path):
             df_existing = pd.read_csv(path)
             
+            # 1. If the seed already exists, completely remove its row
             if self.seed in df_existing["seed"].values:
-                idx = df_existing.index[df_existing["seed"] == self.seed][0]
-                for col in df_new.columns:
-                    try:
-                        df_existing.at[idx, col] = df_new.at[0, col]
-                    except (TypeError, ValueError):
-                        print(col)
-                        df_existing.at[idx, col] = str(df_new.at[0, col])
-            else:
-                df_existing = pd.concat([df_existing, df_new], ignore_index=True)
+                df_existing = df_existing[df_existing["seed"] != self.seed]
+            
+            # 2. Concatenate the new row to the bottom (Pandas handles the types automatically!)
+            df_existing = pd.concat([df_existing, df_new], ignore_index=True)
+            
+            df_existing = df_existing.sort_values(by="seed", ignore_index=True)
+            
+            # 3. Save it
             df_existing.to_csv(path, index=False)
         else:
             df_new.to_csv(path, mode="w", header=True, index=False)
+
+#        if os.path.exists(path):
+#            df_existing = pd.read_csv(path)
+#            
+#            if self.seed in df_existing["seed"].values:
+#                idx = df_existing.index[df_existing["seed"] == self.seed][0]
+#                for col in df_new.columns:
+#                    try:
+#                        df_existing.at[idx, col] = df_new.at[0, col]
+#                    except (TypeError, ValueError):
+#                        print(col) ######################################################################################### <-- Pay attention
+#                        df_existing.at[idx, col] = str(df_new.at[0, col])
+#            else:
+#                df_existing = pd.concat([df_existing, df_new], ignore_index=True)
+#            df_existing.to_csv(path, index=False)
+#        else:
+#            df_new.to_csv(path, mode="w", header=True, index=False)
             
         self.csv_path = path
 
