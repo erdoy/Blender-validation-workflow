@@ -1,37 +1,36 @@
-import sys, os, site, importlib
 
-# -------------- IMPORT DEPENDENCIES -----------------#
+# # -------------- IMPORT DEPENDENCIES -----------------#
 
-# Get the path to where the --user flag installs packages
-user_site_packages = site.getusersitepackages()
-# 1. Define the path where your scripts live on this public PC
-scripts_dir = os.path.join(os.path.expanduser("~"), "Documents", "BlenderScripts")
+# # Get the path to where the --user flag installs packages
+# user_site_packages = site.getusersitepackages()
+# # 1. Define the path where your scripts live on this public PC
+# scripts_dir = os.path.join(os.path.expanduser("~"), "Documents", "BlenderScripts")
 
-# Force Blender to look in this folder for modules
-if user_site_packages not in sys.path:
-    sys.path.append(user_site_packages)
+# # Force Blender to look in this folder for modules
+# if user_site_packages not in sys.path:
+#     sys.path.append(user_site_packages)
 
-# 2. Add that folder to Python's path if it isn't there already
-if scripts_dir not in sys.path:
-    sys.path.append(scripts_dir)
+# # 2. Add that folder to Python's path if it isn't there already
+# if scripts_dir not in sys.path:
+#     sys.path.append(scripts_dir)
 
-# 3. Import your custom module!
-import hexgrid_params
+# # 3. Import your custom module!
+# import hexgrid_params
 
-importlib.reload(hexgrid_params)
+# importlib.reload(hexgrid_params)
 
-# ----------------------------------------------------#
+# # ----------------------------------------------------#
 
 from hexgrid_params import *
 from helper_functions import inspect_mod_inputs, inspect_node, generate_distinct_colors
 
+import os
 import bpy
 import torch
 import torch.nn as nn
 from torchvision import transforms, models
 from PIL import Image
 import pandas as pd
-import numpy as np
 from sklearn.preprocessing import StandardScaler
 
 # =============================================================
@@ -53,9 +52,9 @@ print("\n--- Booting AI Assistant ---")
 # The AI only understands scaled math. We must recreate the scaler.
 df = pd.read_csv(CSV_PATH)
 df = df.dropna(subset=['valid']).reset_index(drop=True)
-df = df.drop(columns=['camera_target'], errors='ignore')
+df = df.drop(columns=['camera_target'])
 df = df.loc[:, df.nunique() > 1] # Drop zero-variance columns
-feature_cols = [col for col in df.columns if col not in ['valid', 'seed', 'camera_target']]
+feature_cols = [col for col in df.columns if col not in ['valid', 'seed']]
 
 scaler = StandardScaler()
 scaler.fit(df[feature_cols]) # Relearn the mean and variance of your original dataset
@@ -136,11 +135,7 @@ def randomize_and_get_parameters(seed):
     
     return data
 
-def take_hidden_screenshot():
-    """Renders the current viewport instantly to a temporary file."""
-    
-    
-    
+def take_hidden_render():
     scene = bpy.context.scene
     
     original_settings = {
@@ -150,11 +145,9 @@ def take_hidden_screenshot():
         "resolution_x": scene.render.resolution_x,
         "resolution_y": scene.render.resolution_y,
         "resolution_percentage": scene.render.resolution_percentage,
-        "samples": None
+        "samples": getattr(scene.eevee, "taa_render_samples", None) if hasattr(scene, "eevee") else None
     }
 
-    if hasattr(scene, "eevee"):
-        original_settings["samples"] = scene.eevee.taa_render_samples
     try:
 #        print("Applying ultra-low resolution overrides for speed...")
         scene.render.engine = 'BLENDER_EEVEE'  
@@ -180,220 +173,56 @@ def take_hidden_screenshot():
         scene.render.resolution_percentage = original_settings["resolution_percentage"]
         
         if original_settings["samples"] is not None:
-            scene.eevee.taa_render_samples = original_settings["samples"]
-            
-            
-
-
-
-
-
-
-
-
-
-
-
-# ==============================================================================
-# 1. DEFINE PROPERTIES (The Data)
-# ==============================================================================
-class MyCustomProperties(bpy.types.PropertyGroup):
-    """Group of properties representing the state of our UI"""
-    
-    my_string: bpy.props.StringProperty(
-        name="Project Name",
-        description="Enter a string",
-        default="Untitled Project"
-    )
-    
-    my_int: bpy.props.IntProperty(
-        name="Iterations",
-        description="An integer slider",
-        default=5,
-        min=1,
-        max=100
-    )
-    
-    my_float: bpy.props.FloatProperty(
-        name="Intensity",
-        description="A float slider",
-        default=0.5,
-        min=0.0,
-        max=1.0,
-        subtype='FACTOR' # Renders as a slider without needing to drag
-    )
-    
-    my_bool: bpy.props.BoolProperty(
-        name="Enable Feature X",
-        description="A simple checkbox",
-        default=True
-    )
-    
-    my_color: bpy.props.FloatVectorProperty(
-        name="Theme Color",
-        subtype='COLOR',
-        default=(1.0, 0.0, 0.0, 1.0), # Red, Green, Blue, Alpha
-        size=4,
-        min=0.0,
-        max=1.0,
-        description="Color picker element"
-    )
-    
-    my_enum: bpy.props.EnumProperty(
-        name="Mode",
-        description="A dropdown menu",
-        items=[
-            ('OP1', "Option 1", "Description for Option 1", 'MESH_CUBE', 1),
-            ('OP2', "Option 2", "Description for Option 2", 'MESH_UVSPHERE', 2),
-            ('OP3', "Option 3", "Description for Option 3", 'MESH_SUZANNE', 3)
-        ]
-    )
-
-# ==============================================================================
-# 2. DEFINE THE UI PANEL (The Visuals)
-# ==============================================================================
-class MYADDON_PT_comprehensive_panel(bpy.types.Panel):
-    bl_label = "Hex Grid AI Validation Assist"
-    bl_idname = "MYADDON_PT_comprehensive_panel"
-    bl_space_type = 'PROPERTIES'
-    bl_region_type = 'WINDOW'     # The N-Panel Sidebar
-    bl_context = "modifier"
-    bl_category = "My Tools"  # The name of the tab
-
-    def draw(self, context):
-        layout = self.layout
-        scene = context.scene
-        
-        # Access our custom properties
-        my_props = scene.my_custom_props
-
-        # --- 1. Basic Text and Strings ---
-        layout.label(text="Basic Inputs:", icon='INFO')
-        layout.prop(my_props, "my_string", icon='TEXT')
-        
-        layout.separator() # Adds a small vertical gap
-
-        # --- 2. Sliders and Numbers ---
-        # A 'box' groups elements inside a visual bounding box
-        box = layout.box()
-        box.label(text="Numeric Parameters:")
-        
-        row = box.row()
-        row.prop(my_props, "my_int")
-        row.prop(my_props, "my_float")
-
-        layout.separator()
-
-        # --- 3. Toggles and Layout Alignments ---
-        # align=True makes elements stick together without gaps
-        row = layout.row(align=True) 
-        row.prop(my_props, "my_bool", toggle=True) # toggle=True makes it a button instead of a checkbox
-        row.operator("mesh.primitive_cube_add", text="Action!") # Native button
-        
-        # Standard checkbox
-        layout.prop(my_props, "my_bool") 
-
-        # --- 4. Dropdowns and Color Pickers ---
-        layout.separator()
-        layout.label(text="Visuals & Modes:")
-        
-        # Split divides the row into percentage-based columns (0.3 = 30% / 70%)
-        split = layout.split(factor=0.3)
-        split.label(text="Color:")
-        split.prop(my_props, "my_color", text="") # text="" hides the label so just the picker shows
-        
-        layout.prop(my_props, "my_enum", expand=False) # expand=False = Dropdown. True = Row of buttons.
-
-        # --- 5. Conditional UI (Displays only if conditions are met) ---
-        layout.separator()
-        if my_props.my_bool:
-            col = layout.column()
-            col.alert = True # Makes the UI element red to grab attention
-            col.label(text="Feature X is currently ENABLED!")
-            col.operator("render.render", icon='RENDER_STILL')
-        else:
-            layout.label(text="Check the box to reveal more options...", icon='RESTRICT_VIEW_ON')
-
-# ==============================================================================
-# 3. REGISTRATION
-# ==============================================================================
-classes = (
-    MyCustomProperties,
-    MYADDON_PT_comprehensive_panel,
-)
-
-def register():
-    for cls in classes:
-        bpy.utils.register_class(cls)
-    # Attach our properties to the Scene so they are globally accessible
-    bpy.types.Scene.my_custom_props = bpy.props.PointerProperty(type=MyCustomProperties)
-
-def unregister():
-    for cls in reversed(classes):
-        bpy.utils.unregister_class(cls)
-    # Clean up the properties when the script is unloaded
-    del bpy.types.Scene.my_custom_props
-    
-    
-    
-    
-
-
-
-
-
-
-    
+            scene.eevee.taa_render_samples = original_settings["samples"]    
 
 # =============================================================
 # 6. THE AI HUNT LOOP
 # =============================================================
-register()
 
-SEED_LIST = list(range(2594, 3000))
+def start_hunting():
+    SEED_LIST = list(range(2651, 3000))
 
-print("\nHunting for a Valid Scene...")
+    print("\nHunting for a Valid Scene...")
 
-with torch.no_grad(): # Tells PyTorch not to calculate gradients (saves massive memory)
-    for seed in SEED_LIST:
-        
-        # 1. Scramble the scene
-        hg = HexGridParams(mod, node_group, seed)
-        hg.csv_path = CSV_PATH
-        hg.set_params()
-        
-        hg.update()
-        
-        raw_params_dict = hg.save_params(TARGET_CSV_PATH)
-        
-        # 2. Format math parameters correctly
-        # We must order the dictionary values exactly as feature_cols expects them
-        ordered_params = [raw_params_dict[col] for col in feature_cols]
-        scaled_params = scaler.transform(pd.DataFrame([ordered_params], columns=feature_cols))
-        tensor_params = torch.tensor(scaled_params, dtype=torch.float32).to(device)
-        
-        # 3. Take screenshot and format image
-        take_hidden_screenshot()
-        img = Image.open(TEMP_IMG_PATH).convert('RGB')
-        tensor_img = image_transforms(img).unsqueeze(0).to(device) # unsqueeze(0) adds a fake batch size of 1
-        
-        # 4. Ask the AI!
-        output_logit = model(tensor_img, tensor_params)
-        probability = torch.sigmoid(output_logit).item() * 100
-        
-        if probability >= 50.0:
-            print(f"✅ SEED {seed}: SUCCESS! AI loves this scene ({probability:.1f}% confidence).")
+    with torch.no_grad(): # Tells PyTorch not to calculate gradients (saves massive memory)
+        for seed in SEED_LIST:
             
-            break
+            # 1. Scramble the scene
+            hg = HexGridParams(mod, node_group, seed)
+            hg.csv_path = CSV_PATH
+            hg.set_params()
+            
+            hg.update()
+            
+            raw_params_dict = hg.save_params(TARGET_CSV_PATH)
+            
+            # 2. Format math parameters correctly
+            # We must order the dictionary values exactly as feature_cols expects them
+            ordered_params = [raw_params_dict[col] for col in feature_cols]
+            scaled_params = scaler.transform(pd.DataFrame([ordered_params], columns=feature_cols))
+            tensor_params = torch.tensor(scaled_params, dtype=torch.float32).to(device)
+            
+            # 3. Take screenshot and format image
+            take_hidden_render()
+            with Image.open(TEMP_IMG_PATH) as img:
+                img_rgb = img.convert('RGB')
+                tensor_img = image_transforms(img_rgb).unsqueeze(0).to(device)
+            
+            # 4. Ask the AI!
+            output_logit = model(tensor_img, tensor_params)
+            probability = torch.sigmoid(output_logit).item() * 100
+            
+            if probability >= 50.0:
+                print(f"✅ SEED {seed}: SUCCESS! AI loves this scene ({probability:.1f}% confidence).")
+                
+                break
+            else:
+                print(f"❌ SEED {seed}: AI rejected scene ({probability:.1f}% confidence). Rerolling...")
+                
         else:
-            print(f"❌ SEED {seed}: AI rejected scene ({probability:.1f}% confidence). Rerolling...")
-            
-    else:
-        print("\n⚠️ Reached max attempts without finding a Valid scene. AI is being very picky!")
+            print("\n⚠️ Reached max attempts without finding a Valid scene. AI is being very picky!")
 
-print("--- Assistant Finished ---")
+    print("--- Hunt Finished ---")
 
 
 
-#if __name__ == "__main__":
-#    register()
