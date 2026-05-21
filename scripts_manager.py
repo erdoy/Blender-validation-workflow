@@ -114,7 +114,7 @@ class MYADDON_OT_run_script(bpy.types.Operator):
             
             props = context.scene.my_custom_props
             
-            AI_assist.start_hunting(props.start,props.end,props.continuous)
+            AI_assist.start_hunting(props.start,props.end,context,props.continuous)
             
             self.report({'INFO'}, "AI Assist ran successfully!")
             

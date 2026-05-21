@@ -180,7 +180,7 @@ def take_hidden_render():
 # =============================================================
 stop_requested = False
 
-def start_hunting(self,start, end, context,continuous=True):
+def start_hunting(start, end, context,continuous=True):
     global stop_requested
     stop_requested = False
 
@@ -197,6 +197,7 @@ def start_hunting(self,start, end, context,continuous=True):
             hg.set_params()
             
             hg.update()
+            bpy.data.objects['Plane'].location[2] = hg.instance_scale
             
             raw_params_dict = hg.save_params(TARGET_CSV_PATH)
             
