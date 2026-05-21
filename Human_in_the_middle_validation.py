@@ -161,13 +161,15 @@ class HEXGRID_OT_keypress_handler(bpy.types.Operator):
         return {'RUNNING_MODAL'}
 
 
-# --- UI Panel ---
+# --- UI Panel --- #############################################   MOVED TO scripts_manager.py
 class HEXGRID_PT_panel(bpy.types.Panel):
     bl_label = "HexGrid Control"
     bl_idname = "HEXGRID_PT_panel"
-    bl_space_type = 'VIEW_3D'
-    bl_region_type = 'UI'
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
     bl_category = 'HexGrid'
+    bl_context = "modifier"
+    bl_parent_id = "MYADDON_PT_comprehensive_panel"
 
     def draw(self, context):
         layout = self.layout

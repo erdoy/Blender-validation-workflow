@@ -199,6 +199,8 @@ def start_hunting(start, end, context,continuous=True):
             hg.update()
             bpy.data.objects['Plane'].location[2] = hg.instance_scale
             
+            context.scene.my_custom_props.seed = seed
+            
             raw_params_dict = hg.save_params(TARGET_CSV_PATH)
             
             # 2. Format math parameters correctly
@@ -221,6 +223,8 @@ def start_hunting(start, end, context,continuous=True):
                 print(f"✅ SEED {seed}: SUCCESS! AI loves this scene ({probability:.1f}% confidence).")
                 hg.save_params(TARGET_CSV_PATH,True)
                 context.scene.my_custom_props.confidence = probability/100
+                bpy.ops.image.open(filepath="//temp_inference.png", directory="//", files=[{"name":"temp_inference.png", "name":"temp_inference.png"}], relative_path=True, show_multiview=False)
+
                 if not continuous:
                     break
             else:

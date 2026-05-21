@@ -34,6 +34,12 @@ class MyCustomProperties(bpy.types.PropertyGroup):
         default=0,
     )
     
+    seed: bpy.props.IntProperty(
+        name="Seed",
+        description="Seed that is being displayed",
+        default=0,
+    )
+    
     start: bpy.props.IntProperty(
         name="Start",
         description="Select start seed",
@@ -86,6 +92,11 @@ class MyCustomProperties(bpy.types.PropertyGroup):
         subtype='FACTOR' # This gives it the filled "progress bar" look
     )
     
+    show_seed_box: bpy.props.BoolProperty(
+        name="Seed Range",
+        default=True # Set to False if you want it closed by default
+    )
+    
     my_enum: bpy.props.EnumProperty(
         name="Mode",
         description="A dropdown menu",
@@ -94,6 +105,17 @@ class MyCustomProperties(bpy.types.PropertyGroup):
             ('OP2', "Option 2", "Description for Option 2", 'MESH_UVSPHERE', 2),
             ('OP3', "Option 3", "Description for Option 3", 'MESH_SUZANNE', 3)
         ]
+    )
+    
+    script_selector: bpy.props.EnumProperty(
+        name="Script",
+        description="Choose which script to execute",
+        items=[
+            ('ASSIST_VALID', "AI Assisted Validation", "Run AI_assist.py", '', 1),
+            ('MANUAL_VALID', "Manual Validation", "Run Human_in_the_middle_validation.py", '', 2),
+            ('REVIEW_VALID', "Review Valid", "Run review_validated.py", '', 3),
+        ],
+        default='ASSIST_VALID'
     )
     
 # ==============================================================================
@@ -105,18 +127,34 @@ class MYADDON_OT_run_script(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
+        
+        props = context.scene.my_custom_props
+        
+        SCRIPT_MAP = {
+            'ASSIST_VALID': ("AI_assist", "start_hunting", True),
+            'MANUAL_VALID': ("Human_in_the_middle_validation", "register", False),
+            'REVIEW_VALID': ("review_validated", "register", False)
+        }
+        
+        selection = props.script_selector
+        if selection not in SCRIPT_MAP:
+            self.report({'ERROR'}, f"Unknown script selection: {selection}")
+            return {'CANCELLED'}
+            
+        module_name, func_name, uses_seeds = SCRIPT_MAP[selection]
             
         try:
-            import AI_assist
-            importlib.reload(AI_assist)
+            module = importlib.import_module(module_name)
+            importlib.reload(module)
             
             # 4. Run the function you defined inside your script
+            run_func = getattr(module, func_name)
             
-            props = context.scene.my_custom_props
+            run_func(props.start, props.end, context, props.continuous)
             
             AI_assist.start_hunting(props.start,props.end,context,props.continuous)
             
-            self.report({'INFO'}, "AI Assist ran successfully!")
+            self.report({'INFO'}, f"Executed script: {selection}")
             
         except Exception as e:
             self.report({'ERROR'}, f"Script failed: {str(e)}")
@@ -158,59 +196,90 @@ class MYADDON_PT_comprehensive_panel(bpy.types.Panel):
         props = scene.my_custom_props
 
         # --- 1. Basic Text and Strings ---
-        layout.label(text="Basic Inputs:", icon='INFO')
-        layout.prop(props, "my_string", icon='TEXT')
+#        layout.label(text="Basic Inputs:", icon='INFO')
+#        layout.prop(props, "my_string", icon='TEXT')
         
-        layout.separator() # Adds a small vertical gap
+#        layout.separator() # Adds a small vertical gap
+        
+        layout.prop(props, "script_selector")
         
         row = layout.row(align=True) 
         row.operator("my_script.run_script", text="Run Script", icon='PLAY')
         row.operator("my_script.stop_script", text="Stop Script", icon='PAUSE')
         
-        layout.separator() # Adds a small vertical gap
+#        layout.separator() # Adds a small vertical gap
         
-        box = layout.box()
-        box.label(text="Seed Range")
+
+#        layout.separator()
+
+#        # --- 3. Toggles and Layout Alignments ---
+#        # align=True makes elements stick together without gaps
+#        row = layout.row(align=True) 
+#        row.prop(props, "my_bool", toggle=True) # toggle=True makes it a button instead of a checkbox
+#        row.operator("mesh.primitive_cube_add", text="Action!") # Native button
+#        
+#        # Standard checkbox
+#        layout.prop(props, "my_bool") 
+
+#        # --- 4. Dropdowns and Color Pickers ---
+#        layout.separator()
+#        layout.label(text="Visuals & Modes:")
+#        
+#        # Split divides the row into percentage-based columns (0.3 = 30% / 70%)
+#        split = layout.split(factor=0.3)
+#        split.label(text="Color:")
+#        split.prop(props, "my_color", text="") # text="" hides the label so just the picker shows
+#        
+#        layout.prop(props, "my_enum", expand=False) # expand=False = Dropdown. True = Row of buttons.
+
+#        # --- 5. Conditional UI (Displays only if conditions are met) ---
+#        layout.separator()
+#        if props.my_bool:
+#            col = layout.column()
+#            col.alert = True # Makes the UI element red to grab attention
+#            col.label(text="Feature X is currently ENABLED!")
+#            col.operator("render.render", icon='RENDER_STILL')
+#        else:
+#            layout.label(text="Check the box to reveal more options...", icon='RESTRICT_VIEW_ON')
+
+class MYADDON_PT_AI_assist_subpanel(bpy.types.Panel):
+    bl_label = "AI Assisted Validation"
+    bl_idname = "MYADDON_PT_AI_assist_subpanel"
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = "modifier"
+    
+    # THIS is the magic line that makes it a subsection of the panel above
+    bl_parent_id = "MYADDON_PT_comprehensive_panel"
+    
+    # Optional: Add this line if you want the panel closed by default
+    # bl_options = {'DEFAULT_CLOSED'} 
+
+    def draw(self, context):
+        layout = self.layout
+        props = context.scene.my_custom_props
         
-        row = box.row()
+        # We don't need layout.box() or booleans anymore, the sub-panel handles it
+        row = layout.row()
         row.prop(props, "start")
         row.prop(props, "end")
         
         layout.prop(props, "continuous", toggle=True)
-
-        layout.prop(props, "confidence", slider=True)
-
-        layout.separator()
-
-        # --- 3. Toggles and Layout Alignments ---
-        # align=True makes elements stick together without gaps
-        row = layout.row(align=True) 
-        row.prop(props, "my_bool", toggle=True) # toggle=True makes it a button instead of a checkbox
-        row.operator("mesh.primitive_cube_add", text="Action!") # Native button
         
-        # Standard checkbox
-        layout.prop(props, "my_bool") 
+        box = layout.box()
+        # Create a tight, aligned display block
+        row = box.row(align=True)
+        # Label side (takes up left space)
+        row.label(text="Processing Seed:")
+        # Data side (drawn inside a stylized text box, but set to locked)
+        sub = row.row()
+        sub.enabled = False # Completely locks interaction
+        sub.prop(props, "seed", text="") # text="" hides duplicate label
 
-        # --- 4. Dropdowns and Color Pickers ---
-        layout.separator()
-        layout.label(text="Visuals & Modes:")
-        
-        # Split divides the row into percentage-based columns (0.3 = 30% / 70%)
-        split = layout.split(factor=0.3)
-        split.label(text="Color:")
-        split.prop(props, "my_color", text="") # text="" hides the label so just the picker shows
-        
-        layout.prop(props, "my_enum", expand=False) # expand=False = Dropdown. True = Row of buttons.
+        box.prop(props, "confidence", slider=True)
 
-        # --- 5. Conditional UI (Displays only if conditions are met) ---
-        layout.separator()
-        if props.my_bool:
-            col = layout.column()
-            col.alert = True # Makes the UI element red to grab attention
-            col.label(text="Feature X is currently ENABLED!")
-            col.operator("render.render", icon='RENDER_STILL')
-        else:
-            layout.label(text="Check the box to reveal more options...", icon='RESTRICT_VIEW_ON')
+#import Human_in_the_middle_validation
+from Human_in_the_middle_validation import *
 
 # ==============================================================================
 # 3. REGISTRATION
@@ -220,6 +289,8 @@ classes = (
     MYADDON_PT_comprehensive_panel,
     MYADDON_OT_run_script,
     MYADDON_OT_stop_script,
+    MYADDON_PT_AI_assist_subpanel,
+#    HEXGRID_PT_panel,
 )
 
 def register():
