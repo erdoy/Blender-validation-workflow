@@ -39,6 +39,7 @@ from sklearn.preprocessing import StandardScaler
 
 blend_file_path = bpy.data.filepath
 scripts_dir = os.path.dirname(blend_file_path)
+
 CSV_PATH = os.path.join(scripts_dir, "data.csv")
 TARGET_CSV_PATH = os.path.join(scripts_dir, "AI_assist_data.csv")
 MODEL_PATH = os.path.join(scripts_dir, "multimodal_ai_bottleneck.pth")
@@ -117,23 +118,15 @@ image_transforms = transforms.Compose([
 # =============================================================
 # 4.5 GENERATE hg
 # =============================================================
-obj = bpy.data.objects["HexGridController"]
 mod = bpy.data.objects["HexGridController"].modifiers["HexGrid"]
 node_group = bpy.data.node_groups['HexGridGroup']
 
 hg = HexGridParams(mod, node_group, 0)
-hg.csv_path = CSV_PATH
+hg.csv_path = TARGET_CSV_PATH
 
 # =============================================================
 # 5. BLENDER INTERACTION FUNCTIONS
 # =============================================================
-def randomize_and_get_parameters(seed):
-    hg.seed = seed
-    hg.set_params()
-    
-    data = hg.save_params()
-    
-    return data
 
 def take_hidden_render():
     scene = bpy.context.scene
@@ -193,7 +186,7 @@ def start_hunting(start, end, context,continuous=True):
             
             # 1. Scramble the scene
             hg = HexGridParams(mod, node_group, seed)
-            hg.csv_path = CSV_PATH
+            hg.csv_path = TARGET_CSV_PATH
             hg.set_params()
             
             hg.update()
@@ -223,7 +216,6 @@ def start_hunting(start, end, context,continuous=True):
                 print(f"✅ SEED {seed}: SUCCESS! AI loves this scene ({probability:.1f}% confidence).")
                 hg.save_params(TARGET_CSV_PATH,True)
                 context.scene.my_custom_props.confidence = probability/100
-                bpy.ops.image.open(filepath="//temp_inference.png", directory="//", files=[{"name":"temp_inference.png", "name":"temp_inference.png"}], relative_path=True, show_multiview=False)
 
                 if not continuous:
                     break

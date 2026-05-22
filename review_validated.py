@@ -1,8 +1,6 @@
-import sys
-sys.path.append(r"C:\Users\1234\Documents\Obsidian\Blender\Terrain_random_perfeccionar")
 from hexgrid_params import *
 
-CSV_PATH = r"C:\Users\1234\Documents\Obsidian\Blender\Terrain_random_perfeccionar\data.csv"
+CSV_PATH = os.path.join(scripts_dir, "data.csv")
 
 mod = bpy.data.objects["HexGridController"].modifiers["HexGrid"]
 node_group = bpy.data.node_groups['HexGridGroup']
@@ -33,12 +31,13 @@ def run_loop():
     return None 
 
 # Panel UI to start/stop the loop
-class HEXGRID_PT_panel(bpy.types.Panel):
-    bl_label = "Hex Grid Controller"
-    bl_idname = "HEXGRID_PT_panel"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "UI"
+class REV_VAL_PT_panel(bpy.types.Panel):
+    bl_label = "Review Validated"
+    bl_idname = "REV_VAL_PT_panel"
+    bl_space_type = "PROPERTIES"
+    bl_region_type = "WINDOW"
     bl_category = "HexGrid"
+    bl_parent_id = "MYADDON_PT_comprehensive_panel"
 
     def draw(self, context):
         layout = self.layout
@@ -47,19 +46,19 @@ class HEXGRID_PT_panel(bpy.types.Panel):
 #        layout.prop(scene, "hexgrid_csv_path")
         row = layout.row()
         if loop_running:
-            row.operator("hexgrid.stop_loop", text="Stop Loop", icon='PAUSE')
+            row.operator("rev_val.stop_loop", text="Stop Loop", icon='PAUSE')
             
             layout.separator()
             layout.label(text="View iteration:")
             nav_row = layout.row()
             
-            nav_row.operator("hexgrid.previous", text="Previous", icon='EVENT_LEFT_ARROW')
-            nav_row.operator("hexgrid.next", text="Next", icon='EVENT_RIGHT_ARROW')
+            nav_row.operator("rev_val.previous", text="Previous", icon='EVENT_LEFT_ARROW')
+            nav_row.operator("rev_val.next", text="Next", icon='EVENT_RIGHT_ARROW')
         else:
-            row.operator("hexgrid.start_loop", text="Start Loop", icon='PLAY')
+            row.operator("rev_val.start_loop", text="Start Loop", icon='PLAY')
 
-class HEXGRID_OT_start_loop(bpy.types.Operator):
-    bl_idname = "hexgrid.start_loop"
+class REV_VAL_OT_start_loop(bpy.types.Operator):
+    bl_idname = "rev_val.start_loop"
     bl_label = "Start HexGrid Loop"
 
     def execute(self, context):
@@ -71,8 +70,8 @@ class HEXGRID_OT_start_loop(bpy.types.Operator):
             print("Started loop")
         return {'FINISHED'}
     
-class HEXGRID_OT_next(bpy.types.Operator):
-    bl_idname = "hexgrid.next"
+class REV_VAL_OT_next(bpy.types.Operator):
+    bl_idname = "rev_val.next"
     bl_label = "Next"
 
     def execute(self, context):
@@ -83,8 +82,8 @@ class HEXGRID_OT_next(bpy.types.Operator):
             bpy.app.timers.register(run_loop)
         return {'FINISHED'}
     
-class HEXGRID_OT_previous(bpy.types.Operator):
-    bl_idname = "hexgrid.previous"
+class REV_VAL_OT_previous(bpy.types.Operator):
+    bl_idname = "rev_val.previous"
     bl_label = "Previous"
 
     def execute(self, context):
@@ -95,8 +94,8 @@ class HEXGRID_OT_previous(bpy.types.Operator):
             bpy.app.timers.register(run_loop)
         return {'FINISHED'}
 
-class HEXGRID_OT_stop_loop(bpy.types.Operator):
-    bl_idname = "hexgrid.stop_loop"
+class REV_VAL_OT_stop_loop(bpy.types.Operator):
+    bl_idname = "rev_val.stop_loop"
     bl_label = "Stop HexGrid Loop"
 
     def execute(self, context):
@@ -106,7 +105,7 @@ class HEXGRID_OT_stop_loop(bpy.types.Operator):
         return {'FINISHED'}
 
 
-classes = [HEXGRID_PT_panel, HEXGRID_OT_start_loop, HEXGRID_OT_stop_loop, HEXGRID_OT_next, HEXGRID_OT_previous]
+classes = (REV_VAL_PT_panel, REV_VAL_OT_start_loop, REV_VAL_OT_stop_loop, REV_VAL_OT_next, REV_VAL_OT_previous)
 
 def unregister():
     for cls in reversed(classes):
@@ -120,5 +119,5 @@ def register():
     for cls in classes:
         bpy.utils.register_class(cls)
 
-if __name__ == "__main__":
-    register()
+#if __name__ == "__main__":
+#    register()

@@ -152,7 +152,7 @@ class MYADDON_OT_run_script(bpy.types.Operator):
             
             run_func(props.start, props.end, context, props.continuous)
             
-            AI_assist.start_hunting(props.start,props.end,context,props.continuous)
+#            AI_assist.start_hunting(props.start,props.end,context,props.continuous)
             
             self.report({'INFO'}, f"Executed script: {selection}")
             
@@ -279,7 +279,7 @@ class MYADDON_PT_AI_assist_subpanel(bpy.types.Panel):
         box.prop(props, "confidence", slider=True)
 
 #import Human_in_the_middle_validation
-from Human_in_the_middle_validation import *
+#from Human_in_the_middle_validation import *
 
 # ==============================================================================
 # 3. REGISTRATION
@@ -306,4 +306,12 @@ def unregister():
     del bpy.types.Scene.my_custom_props
     
 if __name__ == "__main__":
+    import Human_in_the_middle_validation, review_validated
+    classes = classes + Human_in_the_middle_validation.classes + tuple(review_validated.classes)
+    
+    try:
+        unregister()
+    except Exception:
+        pass
+    
     register()
