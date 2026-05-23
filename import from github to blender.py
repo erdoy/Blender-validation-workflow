@@ -50,8 +50,3 @@ else:
     print(f"[WARNING] Could not find {BLEND_FILE_NAME} in the repository. Opening default scene.")
     # If the file doesn't exist, just load the scripts into the empty default scene directly
     load_scripts_after_open( your previous workflow. 
-
-Here is exactly why this new script is bulletproof:
-
-### 1. The Git Directory Fix
-By using `subprocess.run(["git", "-C", LOCAL_DIR, "pull"])`, you are using Git's built-in `-C` flag. This explicitly tells Git, *"PreNone)
