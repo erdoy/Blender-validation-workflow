@@ -40,26 +40,10 @@ from sklearn.preprocessing import StandardScaler
 blend_file_path = bpy.data.filepath
 scripts_dir = os.path.dirname(blend_file_path)
 
-CSV_PATH = os.path.join(scripts_dir, "data.csv")
-TARGET_CSV_PATH = os.path.join(scripts_dir, "AI_assist_data.csv")
-MODEL_PATH = os.path.join(scripts_dir, "multimodal_ai_bottleneck.pth")
-TEMP_IMG_PATH = os.path.join(scripts_dir, "temp_inference.png")
-
-print("\n--- Booting AI Assistant ---")
-
-# =============================================================
-# 2. REBUILD THE SCALER FROM YOUR ORIGINAL DATA
-# =============================================================
-# The AI only understands scaled math. We must recreate the scaler.
-df = pd.read_csv(CSV_PATH)
-df = df.dropna(subset=['valid']).reset_index(drop=True)
-df = df.drop(columns=['camera_target'])
-df = df.loc[:, df.nunique() > 1] # Drop zero-variance columns
-feature_cols = [col for col in df.columns if col not in ['valid', 'seed']]
-
-scaler = StandardScaler()
-scaler.fit(df[feature_cols]) # Relearn the mean and variance of your original dataset
-print(f"Reconstructed Math Scaler for {len(feature_cols)} parameters.")
+# CSV_PATH = os.path.join(scripts_dir, "data.csv")
+# TARGET_CSV_PATH = os.path.join(scripts_dir, "AI_assist_data.csv")
+# MODEL_PATH = os.path.join(scripts_dir, "multimodal_ai_bottleneck.pth")
+# TEMP_IMG_PATH = os.path.join(scripts_dir, "temp_inference.png")
 
 # =============================================================
 # 3. DEFINE THE EXACT AI ARCHITECTURE (BOTTLENECK VERSION)
@@ -96,33 +80,54 @@ class FusionNet(nn.Module):
         output = self.fusion(combined_features)
         return output
 
-# Load the AI Brain into RAM
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = FusionNet(tabular_input_dim=len(feature_cols)).to(device)
-model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
-model.eval() # CRITICAL: Tells the AI it is taking a test, not studying. Turns off Dropout!
-print("AI Brain loaded successfully.")
+class AIASSIST_OT_boot_ai(bpy.types.Operator):
+    bl_label = "Boot Up AI"
+    bl_idname = "ai_assist.boot_up" 
 
-# =============================================================
-# 4. IMAGE PRE-PROCESSING
-# =============================================================
-resnet_mean = [0.485, 0.456, 0.406]
-resnet_std = [0.229, 0.224, 0.225]
+    def execute(self, context):
+        global scaler, model, image_transforms, feature_cols, device
 
-image_transforms = transforms.Compose([
-    transforms.Resize((224, 224)),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=resnet_mean, std=resnet_std)
-])
+        props = context.scene.ai_assist_props
+
+        # =============================================================
+        # 2. REBUILD THE SCALER FROM YOUR ORIGINAL DATA
+        # =============================================================
+        # The AI only understands scaled math. We must recreate the scaler.
+        df = pd.read_csv(props.trained_data_path)
+        df = df.dropna(subset=['valid']).reset_index(drop=True)
+        df = df.drop(columns=['camera_target'])
+        df = df.loc[:, df.nunique() > 1] # Drop zero-variance columns
+        feature_cols = [col for col in df.columns if col not in ['valid', 'seed']]
+
+        scaler = StandardScaler()
+        scaler.fit(df[feature_cols]) # Relearn the mean and variance of your original dataset
+#        print(f"Reconstructed Math Scaler for {len(feature_cols)} parameters.")
+
+        # Load the AI Brain into RAM
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model = FusionNet(tabular_input_dim=len(feature_cols)).to(device)
+        model.load_state_dict(torch.load(props.ai_model_path, map_location=device))
+        model.eval() # CRITICAL: Tells the AI it is taking a test, not studying. Turns off Dropout!
+
+        # =============================================================
+        # 4. IMAGE PRE-PROCESSING
+        # =============================================================
+        resnet_mean = [0.485, 0.456, 0.406]
+        resnet_std = [0.229, 0.224, 0.225]
+
+        image_transforms = transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=resnet_mean, std=resnet_std)
+        ])
+
+        self.report({'INFO'}, f"Booted up AI")
+        return {'FINISHED'}
 
 # =============================================================
 # 4.5 GENERATE hg
 # =============================================================
-mod = bpy.data.objects["HexGridController"].modifiers["HexGrid"]
-node_group = bpy.data.node_groups['HexGridGroup']
 
-hg = HexGridParams(mod, node_group, 0)
-hg.csv_path = TARGET_CSV_PATH
 
 # =============================================================
 # 5. BLENDER INTERACTION FUNCTIONS
@@ -149,7 +154,7 @@ def take_hidden_render():
         scene.render.resolution_x = 128
         scene.render.resolution_y = 128
         scene.render.resolution_percentage = 100
-        bpy.context.scene.render.filepath = TEMP_IMG_PATH
+        bpy.context.scene.render.filepath = bpy.context.scene.ai_assist_props.temp_render_path
         
         bpy.ops.render.render(write_still=True)
 
@@ -173,11 +178,18 @@ def take_hidden_render():
 # =============================================================
 stop_requested = False
 
-def start_hunting(start, end, context,continuous=True):
+def start_hunting():
     global stop_requested
     stop_requested = False
 
-    SEED_LIST = list(range(start, end))
+    mod = bpy.data.objects["HexGridController"].modifiers["HexGrid"]
+    node_group = bpy.data.node_groups['HexGridGroup']
+    
+    hg = HexGridParams(mod, node_group, 0)
+
+    props = bpy.context.scene.ai_assist_props
+
+    SEED_LIST = list(range(props.start, props.end))
 
     print("\nHunting for a Valid Scene...")
 
@@ -185,16 +197,18 @@ def start_hunting(start, end, context,continuous=True):
         for seed in SEED_LIST:
             
             # 1. Scramble the scene
-            hg = HexGridParams(mod, node_group, seed)
-            hg.csv_path = TARGET_CSV_PATH
+            # hg = HexGridParams(mod, node_group, seed)
+            hg.seed = seed
+            hg.rng = np.random.default_rng(seed)
+            hg.csv_path = props.csv_export_path
             hg.set_params()
             
             hg.update()
             bpy.data.objects['Plane'].location[2] = hg.instance_scale
             
-            context.scene.my_custom_props.seed = seed
+            props.seed = seed
             
-            raw_params_dict = hg.save_params(TARGET_CSV_PATH)
+            raw_params_dict = hg.save_params(props.csv_export_path)
             
             # 2. Format math parameters correctly
             # We must order the dictionary values exactly as feature_cols expects them
@@ -204,7 +218,7 @@ def start_hunting(start, end, context,continuous=True):
             
             # 3. Take screenshot and format image
             take_hidden_render()
-            with Image.open(TEMP_IMG_PATH) as img:
+            with Image.open(props.temp_render_path) as img:
                 img_rgb = img.convert('RGB')
                 tensor_img = image_transforms(img_rgb).unsqueeze(0).to(device)
             
@@ -214,10 +228,10 @@ def start_hunting(start, end, context,continuous=True):
             
             if probability >= 50.0:
                 print(f"✅ SEED {seed}: SUCCESS! AI loves this scene ({probability:.1f}% confidence).")
-                hg.save_params(TARGET_CSV_PATH,True)
-                context.scene.my_custom_props.confidence = probability/100
+                hg.save_params(props.csv_export_path,True)
+                props.confidence = probability/100
 
-                if not continuous:
+                if not props.continuous:
                     break
             else:
                 print(f"❌ SEED {seed}: AI rejected scene ({probability:.1f}% confidence). Rerolling...")
@@ -227,6 +241,157 @@ def start_hunting(start, end, context,continuous=True):
                 return
 
     print("--- Hunt Finished ---")
+    
+    
+class AIASSIST_OT_start_loop(bpy.types.Operator):
+    bl_idname = "ai_assist.start_loop"
+    bl_label = "Start Hunting"
+
+    def execute(self, context):
+        start_hunting()
+        
+        return {'FINISHED'}
+    
+class AIASSIST_OT_stop_loop(bpy.types.Operator):
+    bl_idname = "ai_assist.stop_loop"
+    bl_label = "Stop Hunting"
+
+    def execute(self, context):
+        stop_requested = True 
+        return {'FINISHED'}
 
 
 
+class AIASSIST_PT_subpanel(bpy.types.Panel):
+    bl_label = "AI Assisted Validation"
+    bl_idname = "AIASSIST_PT_subpanel"
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = "modifier"
+    bl_parent_id = "MYADDON_PT_comprehensive_panel"
+    
+    # Optional: Add this line if you want the panel closed by default
+    # bl_options = {'DEFAULT_CLOSED'} 
+
+    def draw(self, context):
+        layout = self.layout
+        props = context.scene.ai_assist_props
+        
+        # We don't need layout.box() or booleans anymore, the sub-panel handles it
+        row = layout.row()
+        row.prop(props, "start")
+        row.prop(props, "end")
+        
+        layout.prop(props, "continuous", toggle=True)
+        
+        box = layout.box()
+        # Create a tight, aligned display block
+        row = box.row(align=True)
+        # Label side (takes up left space)
+        row.label(text="Processing Seed:")
+        # Data side (drawn inside a stylized text box, but set to locked)
+        sub = row.row()
+        sub.enabled = False # Completely locks interaction
+        sub.prop(props, "seed", text="") # text="" hides duplicate label
+
+        box.prop(props, "confidence", slider=True)
+        
+        layout.operator("ai_assist.boot_up", text="Reload AI Model & Scaler", icon='FILE_REFRESH')
+        
+        layout.separator()
+        
+        col = layout.column(align=True)
+        col.prop(props, "trained_data_path", icon='DOCUMENTS')
+        col.prop(props, "csv_export_path", icon='FILE_TEXT')
+        col.prop(props, "ai_model_path", icon='SCRIPT')
+        col.prop(props, "temp_render_path", icon='IMAGE_DATA')
+        
+        
+        
+class AIASSIST_Properties(bpy.types.PropertyGroup):
+    continuous: bpy.props.BoolProperty(
+        name="Continuous",
+        description="The script will not stop after discovering the first valid seed",
+        default=False
+    )
+    
+    seed: bpy.props.IntProperty(
+        name="Seed",
+        description="Seed that is being displayed",
+        default=0,
+    )
+    
+    start: bpy.props.IntProperty(
+        name="Start",
+        description="Select start seed",
+        default=2651,
+    )
+    
+    end: bpy.props.IntProperty(
+        name="End",
+        description="Select end seed",
+        default=3000,
+    )
+    
+    trained_data_path: bpy.props.StringProperty(
+        name="AI Trained Data",
+        description="Path of the original data which was used to train the AI",
+        default=os.path.join(scripts_dir, "data.csv"),
+        maxlen=1024,
+        subtype='FILE_PATH' # Magic flag that adds the native file explorer button
+    )
+    
+    csv_export_path: bpy.props.StringProperty(
+        name="CSV Storage Path",
+        description="Path of the csv where the ai assited validation data will be stored",
+        default=os.path.join(scripts_dir, "AI_assist_data.csv"),
+        maxlen=1024,
+        subtype='FILE_PATH' # Magic flag that adds the native file explorer button
+    )
+    
+    ai_model_path: bpy.props.StringProperty(
+        name="AI Model",
+        description="Path of the AI model that will be used",
+        default=os.path.join(scripts_dir, "multimodal_ai_bottleneck.pth"),
+        maxlen=1024,
+        subtype='FILE_PATH' # Magic flag that adds the native file explorer button
+    )
+    
+    temp_render_path: bpy.props.StringProperty(
+        name="Temporary render",
+        description="Path of the temporary low res image that will be used for the CNN",
+        default=os.path.join(scripts_dir, "temp_inference.png"),
+        maxlen=1024,
+        subtype='FILE_PATH' # Magic flag that adds the native file explorer button
+    )
+    
+    confidence: bpy.props.FloatProperty(
+        name="Confidence",
+        description="How confident the AI is in its validity",
+        default=0.5,
+        min=0.0,
+        max=1.0,
+        subtype='FACTOR' # This gives it the filled "progress bar" look
+    )
+        
+classes = (
+    AIASSIST_PT_subpanel,
+    AIASSIST_OT_boot_ai,
+    AIASSIST_Properties,
+    AIASSIST_OT_start_loop,
+    AIASSIST_OT_stop_loop,
+)
+
+def register():
+    for cls in classes:
+        bpy.utils.register_class(cls)
+        
+    bpy.types.Scene.ai_assist_props = bpy.props.PointerProperty(type=AIASSIST_Properties)
+
+    bpy.ops.ai_assist.boot_up()
+
+def unregister():
+    for cls in reversed(classes):
+        bpy.utils.unregister_class(cls)
+        
+    del bpy.types.Scene.ai_assist_props

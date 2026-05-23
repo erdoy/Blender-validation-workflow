@@ -161,18 +161,18 @@ class HEXGRID_OT_keypress_handler(bpy.types.Operator):
         return {'RUNNING_MODAL'}
 
 
-# --- UI Panel --- #############################################   MOVED TO scripts_manager.py
+# --- UI Panel --- 
 class HEXGRID_PT_panel(bpy.types.Panel):
     bl_label = "HexGrid Control"
     bl_idname = "HEXGRID_PT_panel"
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
-    bl_category = 'HexGrid'
     bl_context = "modifier"
     bl_parent_id = "MYADDON_PT_comprehensive_panel"
 
     def draw(self, context):
         layout = self.layout
+        
         layout.operator("hexgrid.start_loop", text="Start Seed Loop")
         layout.operator("hexgrid.stop_loop", text="Stop Seed Loop")
         layout.separator()

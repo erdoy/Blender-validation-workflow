@@ -22,100 +22,15 @@ import importlib
 class MyCustomProperties(bpy.types.PropertyGroup):
     """Group of properties representing the state of our UI"""
     
-    my_string: bpy.props.StringProperty(
-        name="Project Name",
-        description="Enter a string",
-        default="Untitled Project"
-    )
-    
-    my_int: bpy.props.IntProperty(
-        name="Iterations",
-        description="An integer slider",
-        default=0,
-    )
-    
-    seed: bpy.props.IntProperty(
-        name="Seed",
-        description="Seed that is being displayed",
-        default=0,
-    )
-    
-    start: bpy.props.IntProperty(
-        name="Start",
-        description="Select start seed",
-        default=2651,
-    )
-    
-    end: bpy.props.IntProperty(
-        name="End",
-        description="Select end seed",
-        default=3000,
-    )
-    
-    my_float: bpy.props.FloatProperty(
-        name="Intensity",
-        description="A float slider",
-        default=0.5,
-        min=0.0,
-        max=1.0,
-        subtype='FACTOR' # Renders as a slider without needing to drag
-    )
-    
-    my_bool: bpy.props.BoolProperty(
-        name="Enable Feature X",
-        description="A simple checkbox",
-        default=True
-    )
-    
-    continuous: bpy.props.BoolProperty(
-        name="Continuous",
-        description="The script will not stop after discovering the first valid seed",
-        default=True
-    )
-    
-    my_color: bpy.props.FloatVectorProperty(
-        name="Theme Color",
-        subtype='COLOR',
-        default=(1.0, 0.0, 0.0, 1.0), # Red, Green, Blue, Alpha
-        size=4,
-        min=0.0,
-        max=1.0,
-        description="Color picker element"
-    )
-    
-    confidence: bpy.props.FloatProperty(
-        name="Confidence",
-        description="How confident the AI is in its validity",
-        default=0.5,
-        min=0.0,
-        max=1.0,
-        subtype='FACTOR' # This gives it the filled "progress bar" look
-    )
-    
-    show_seed_box: bpy.props.BoolProperty(
-        name="Seed Range",
-        default=True # Set to False if you want it closed by default
-    )
-    
-    my_enum: bpy.props.EnumProperty(
-        name="Mode",
-        description="A dropdown menu",
-        items=[
-            ('OP1', "Option 1", "Description for Option 1", 'MESH_CUBE', 1),
-            ('OP2', "Option 2", "Description for Option 2", 'MESH_UVSPHERE', 2),
-            ('OP3', "Option 3", "Description for Option 3", 'MESH_SUZANNE', 3)
-        ]
-    )
-    
     script_selector: bpy.props.EnumProperty(
         name="Script",
         description="Choose which script to execute",
         items=[
-            ('ASSIST_VALID', "AI Assisted Validation", "Run AI_assist.py", '', 1),
-            ('MANUAL_VALID', "Manual Validation", "Run Human_in_the_middle_validation.py", '', 2),
-            ('REVIEW_VALID', "Review Valid", "Run review_validated.py", '', 3),
+            ('AI_assist', "AI Assisted Validation", "Run AI_assist.py", '', 1),
+            ('Manual_validation', "Manual Validation", "Run Manual_validation.py", '', 2),
+            ('review_validated', "Review Valid", "Run review_validated.py", '', 3),
         ],
-        default='ASSIST_VALID'
+        default='AI_assist'
     )
     
 # ==============================================================================
@@ -128,31 +43,31 @@ class MYADDON_OT_run_script(bpy.types.Operator):
 
     def execute(self, context):
         
-        props = context.scene.my_custom_props
+        selection = context.scene.my_custom_props.script_selector
         
-        SCRIPT_MAP = {
-            'ASSIST_VALID': ("AI_assist", "start_hunting", True),
-            'MANUAL_VALID': ("Human_in_the_middle_validation", "register", False),
-            'REVIEW_VALID': ("review_validated", "register", False)
+        RUN_MAP = {
+            'AI_assist': "ai_assist.start_loop",
+            'Manual_validation': "hexgrid.start_loop",
+            'review_validated': "rev_val.start_loop"
         }
         
-        selection = props.script_selector
-        if selection not in SCRIPT_MAP:
+        
+        if selection not in RUN_MAP:
             self.report({'ERROR'}, f"Unknown script selection: {selection}")
             return {'CANCELLED'}
             
-        module_name, func_name, uses_seeds = SCRIPT_MAP[selection]
+        operator_idname = RUN_MAP[selection]
             
         try:
-            module = importlib.import_module(module_name)
-            importlib.reload(module)
             
-            # 4. Run the function you defined inside your script
-            run_func = getattr(module, func_name)
-            
-            run_func(props.start, props.end, context, props.continuous)
-            
-#            AI_assist.start_hunting(props.start,props.end,context,props.continuous)
+            # Split "ai_assist.start_hunting" into "ai_assist" and "start_hunting"
+            category, name = operator_idname.split('.')
+
+            # Navigate Blender's API: bpy.ops -> ai_assist -> start_hunting
+            operator_func = getattr(getattr(bpy.ops, category), name)
+
+            # Execute the operator!
+            operator_func()
             
             self.report({'INFO'}, f"Executed script: {selection}")
             
@@ -169,12 +84,36 @@ class MYADDON_OT_stop_script(bpy.types.Operator):
     bl_idname = "my_script.stop_script" 
 
     def execute(self, context):
-        # Trigger the kill switch!
-        # Notice we do NOT reload() here, because we want to modify 
-        # the exact instance that is currently running.
-        AI_assist.stop_requested = True 
         
-        self.report({'WARNING'}, "Sent stop signal to AI!")
+        selection = context.scene.my_custom_props.script_selector
+        
+        STOP_MAP = {
+            'AI_assist': "ai_assist.stop_loop", 
+            'Manual_validation': "hexgrid.stop_loop",
+            'review_validated': "review_validated.stop_loop"
+        }
+        
+        if selection not in STOP_MAP:
+            return {'CANCELLED'}
+            
+        operator_idname = STOP_MAP[selection]
+        
+        try:
+            print(f"Routing stop signal to operator: {operator_idname}")
+            
+            # Split "ai_assist.start_hunting" into "ai_assist" and "start_hunting"
+            category, name = operator_idname.split('.')
+
+            # Navigate Blender's API: bpy.ops -> ai_assist -> start_hunting
+            operator_func = getattr(getattr(bpy.ops, category), name)
+
+            # Execute the operator!
+            operator_func()
+                
+        except Exception as e:
+            self.report({'ERROR'}, f"Failed to stop script: {str(e)}")
+            return {'CANCELLED'}
+        
         return {'FINISHED'}
 
 # ==============================================================================
@@ -242,44 +181,6 @@ class MYADDON_PT_comprehensive_panel(bpy.types.Panel):
 #        else:
 #            layout.label(text="Check the box to reveal more options...", icon='RESTRICT_VIEW_ON')
 
-class MYADDON_PT_AI_assist_subpanel(bpy.types.Panel):
-    bl_label = "AI Assisted Validation"
-    bl_idname = "MYADDON_PT_AI_assist_subpanel"
-    bl_space_type = 'PROPERTIES'
-    bl_region_type = 'WINDOW'
-    bl_context = "modifier"
-    
-    # THIS is the magic line that makes it a subsection of the panel above
-    bl_parent_id = "MYADDON_PT_comprehensive_panel"
-    
-    # Optional: Add this line if you want the panel closed by default
-    # bl_options = {'DEFAULT_CLOSED'} 
-
-    def draw(self, context):
-        layout = self.layout
-        props = context.scene.my_custom_props
-        
-        # We don't need layout.box() or booleans anymore, the sub-panel handles it
-        row = layout.row()
-        row.prop(props, "start")
-        row.prop(props, "end")
-        
-        layout.prop(props, "continuous", toggle=True)
-        
-        box = layout.box()
-        # Create a tight, aligned display block
-        row = box.row(align=True)
-        # Label side (takes up left space)
-        row.label(text="Processing Seed:")
-        # Data side (drawn inside a stylized text box, but set to locked)
-        sub = row.row()
-        sub.enabled = False # Completely locks interaction
-        sub.prop(props, "seed", text="") # text="" hides duplicate label
-
-        box.prop(props, "confidence", slider=True)
-
-#import Human_in_the_middle_validation
-#from Human_in_the_middle_validation import *
 
 # ==============================================================================
 # 3. REGISTRATION
@@ -289,8 +190,6 @@ classes = (
     MYADDON_PT_comprehensive_panel,
     MYADDON_OT_run_script,
     MYADDON_OT_stop_script,
-    MYADDON_PT_AI_assist_subpanel,
-#    HEXGRID_PT_panel,
 )
 
 def register():
@@ -306,12 +205,36 @@ def unregister():
     del bpy.types.Scene.my_custom_props
     
 if __name__ == "__main__":
-    import Human_in_the_middle_validation, review_validated
-    classes = classes + Human_in_the_middle_validation.classes + tuple(review_validated.classes)
+    import Manual_validation, review_validated, AI_assist
     
+    sub_modules = [
+        Manual_validation,
+        review_validated,
+        AI_assist
+    ]
+
+    # 1. UNREGISTER FIRST (Reverse order is best practice)
+    # We must unregister the old cached versions before we reload the files
+    for mod in reversed(sub_modules):
+        try:
+            mod.unregister()
+        except Exception:
+            pass
+            
     try:
-        unregister()
+        unregister() # Unregister the main file's classes
     except Exception:
         pass
+
+    # 2. RELOAD MEMORY
+    # Forces Blender to read the physical text files from the hard drive again
+    for mod in sub_modules:
+        importlib.reload(mod)
+
+    # 3. REGISTER EVERYTHING
+    register() # Register main file
     
-    register()
+    for mod in sub_modules:
+        mod.register()
+        
+    print("✅ All modules successfully reloaded and registered!")
